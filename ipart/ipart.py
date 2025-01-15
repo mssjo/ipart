@@ -1,20 +1,18 @@
 #!/bin/python3
 # By Mattias Sjö, 2024
 #
-# Precomputes integer partitions for FORM
-# This can be implemented in FORM but makes for much clumsier code
+# Computes integer partitions
+# Run with argument --help for more instructions
 #
-# First argument is the integer, second is a single letter specifying the kind of partition:
-#   o - ordered: elements of each partition are ordered in descending order (this is the typical mathematical sense)
-#   u - unordered: order of elements is free and different orders are treated as distinct partitions
-#   f - fixed-length: unordered, zero elements are permitted, number of elements is fixed by third argument
-#  (default is o)
 # Generates the partitions in lexicographic order using a straightforward recursive algorithm with caching.
 # Prints them to the screen and prepares a form file called ipart/(concatenation of arguments).hf
 
+import argparse
 from datetime import datetime
 from functools import cache
-import sys
+from os import makedirs
+from sys import argv
+
 
 # These three implemetations are very similar, but a bit of code repitition is clearer
 # than the various conditionals needed to fit all in one function
@@ -67,7 +65,7 @@ def opart(integer):
     """
     if integer < 0:
         raise ValueError(f"Integer must be non-negative ({integer} provided)")
-    return opart_aux(tot, tot)
+    return _opart(integer, integer)
     
 @cache
 def _fpart(tot, length):
@@ -103,33 +101,81 @@ def fpart(integer, length):
 
 def main(argv):
 
-    if not argv:
-        raise ValueError("Integer missing for ipart, should be called as 'ipart INTEGER [ouf]'")
+    parser = argparse.ArgumentParser(
+        prog='ipart',
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="Utility for generating integer partitions.\nBy Mattias Sjö, 2024-25",
+        epilog="The mode options -[ouf] are mutually exclusive.\nMore than one of the output options -[stcF] may be used simultaneously.\n \nThis uses a straightforward non-lazy recursive algorithm that, thanks to extensive caching, should be more-or-less linear in the number of partitions, which is in turn exponential in INT even in the --ordered case.")
 
-    tot = int(argv[0])
+    part_mode = parser.add_mutually_exclusive_group()
+    part_mode.add_argument('-o', '--ordered', action='store_true',
+                           help="Generate ordered partitions into positive integers. This is the default.")
+    part_mode.add_argument('-u', '--unordered', action='store_true',
+                           help="Generate unordered partititons into positive integers.")
+    part_mode.add_argument('-f', '--fixed', action='store', nargs=1, type=int, metavar='N',
+                           help="Generate unordered partitions into a fixed number N of non-negative integers.")
 
-    ord = argv[1] if len(argv) >= 2 else 'o'
-    if ord not in 'uof':
-        raise ValueError("Invalid option to ipart: should be o,u or f")
+    parser.add_argument('-s', '--std', action='store_true',
+                      help="Output whitespace-separated partitions to stdout, one per line. This is the default.")
+    parser.add_argument('-t', '--txt', action='store_true',
+                      help="Output whitespace-separated partitions to ipart/FILE.txt, one per line. FILE is determined by the other options.")
+    parser.add_argument('-c', '--csv', action='store_true',
+                      help="Output comma-separated partitions to ipart/FILE.csv, one per line. FILE is determined by the other options.")
+    parser.add_argument('-F', '--form', action='store_true',
+                      help="Output FORM representations of the partitions to ipart/FILE.hf. FILE is determined by the other options.")
 
-    if ord == 'f':
-        if len(argv) < 3:
-            raise ValueError("Missing length specification for fixed-length partition")
-        length = int(argv[2])
+    parser.add_argument('-v', '--verbose', action='store_true',
+                      help="Implies --std, and prints more information about what is done.")
+
+    parser.add_argument('integer', type=int, metavar='INT',
+                      help="The integer to be partitioned.")
+
+    args = parser.parse_args()
+
+    write_file = any((args.csv, args.txt, args.form))
+    write_std = args.std or not write_file
+
+    if args.unordered:
+        name = "Unrdered"
+        tag = 'u'
+        parts = upart(args.integer)
+    elif args.fixed:
+        name = f"Length-{args.fixed[0]}"
+        tag = f'f{args.fixed[0]}'
+        parts = fpart(args.integer, args.fixed[0])
     else:
-        length = ''
+        name = "Ordered"
+        tag = 'o'
+        parts = opart(args.integer)
 
-    name = {'u': "Unordered", 'o': "Ordered", 'f': f"Length-{length}"}
-    part = {'u': lambda n: upart(n), 'o': lambda n: opart(n), 'f': lambda n: fpart(n, length)}
+    if write_file:
+        makedirs('ipart', exist_ok=True)
+        filename = f"ipart/{args.integer}{tag}"
 
-    filename = f"ipart/{tot}{ord}{length}.hf"
-    with open(filename, 'w') as out:
-        print(f"{name[ord]} partitions of {tot}:")
-        print(f"* Generated with options {argv} on {datetime.now().strftime('%c')}", file=out)
-        for part in part[ord](tot):
-            print(','.join(str(p) for p in part))
-            print(f"   + ipart({','.join(str(p) for p in part)})", file=out)
-        print(f"Wrote to {filename}")
+    if args.verbose:
+        print(f"{name} partitions of {args.integer}:")
+    if write_std or args.verbose:
+        for part in parts:
+            print(' '.join(str(p) for p in part))
+    if args.txt:
+        with open(f"{filename}.txt", 'w') as out:
+            for part in parts:
+                print(' '.join(str(p) for p in part), file=out)
+        if args.verbose:
+            print(f"Wrote to {filename}.txt")
+    if args.csv:
+        with open(f"{filename}.csv", 'w') as out:
+            for part in parts:
+                print(','.join(str(p) for p in part), file=out)
+        if args.verbose:
+            print(f"Wrote to {filename}.csv")
+    if args.form:
+        with open(f"{filename}.hf", 'w') as out:
+            print(f"* Generated by ipart ({__file__}) with options {' '.join(argv)} on {datetime.now().strftime('%c')}", file=out)
+            for part in parts:
+                print(f"   + ipart({','.join(str(p) for p in part)})", file=out)
+        if args.verbose:
+            print(f"Wrote to {filename}.hf")
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main(argv[1:])

@@ -1,17 +1,13 @@
 # ipart
 Simple utility for generating integer partitions
+By Mattias Sjö, 2024-25
 
-Usage:
-```
-ipart [uo] NUMBER
-ipart f NUMBER LENGTH
-```
-The first version generates `o`rdered or `u`nordered partitions of `NUMBER`, i.e. all (un)ordered sequences of positive numbers that add up to `NUMBER`.
-The second version generates `f`ixed-length partitions, i.e. all sequences of length `LENGTH` of non-negative numbers that add up to `NUMBER`.
+## Installation
 
-All versions use a straightforward algorithm that, thanks to extensive caching, should be more-or-less linear in the number of partitions, which is in turn exponential in `NUMBER` even in the ordered case.
+Make `ipart/ipart.py` executable and add it to your `$PATH`; optionally alias it to `ipart` for simplicity.
+Use `pip` to install the python package `ipart` described by `setup.py`, then import it where you need with `import ipath`.
 
-Alternatively, the functions `opart(number)`, `upart(number)` and `fpart(number,length)` can be accessed as a python library via
-```
-import ipart
-```
+## Usage
+
+Run `ipart.py --help` for usage of the command-line tool.
+See the docstrings in `ipart/ipart.py` for usage of the python package.
