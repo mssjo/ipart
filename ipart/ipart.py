@@ -136,7 +136,7 @@ def main(argv):
     write_std = args.std or not write_file
 
     if args.unordered:
-        name = "Unrdered"
+        name = "Unordered"
         tag = 'u'
         parts = upart(args.integer)
     elif args.fixed:
