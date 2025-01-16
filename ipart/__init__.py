@@ -1,1 +1,1 @@
-from .ipart import ipart,upart,opart
+from .ipart import upart,opart,ufpart,ofpart
