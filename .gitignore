@@ -1,0 +1,3 @@
+build/*
+ipart.egg-info/*
+ipart/__pycache__/*
