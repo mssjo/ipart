@@ -5,7 +5,7 @@
 # Run with argument --help for more instructions
 #
 # Generates the partitions in lexicographic order using a straightforward recursive algorithm with caching.
-# Prints them to the screen and prepares a form file called ipart/(concatenation of arguments).hf
+# Prints them to the screen and prepares a form file called partitions/(summary of arguments).hf
 
 import argparse
 from datetime import datetime
@@ -178,11 +178,11 @@ def main(argv):
     out_mode.add_argument('-s', '--std', action='store_true',
                       help="Output whitespace-separated partitions to stdout, one per line. This is implied if no other output mode is specified.")
     out_mode.add_argument('-t', '--txt', action='store_true',
-                      help="Output whitespace-separated partitions to ipart/FILE.txt, one per line. FILE is determined by the other options.")
+                      help="Output whitespace-separated partitions to partitions/FILE.txt, one per line. FILE is determined by the other options.")
     out_mode.add_argument('-c', '--csv', action='store_true',
-                      help="Output comma-separated partitions to ipart/FILE.csv, one per line. FILE is determined by the other options.")
+                      help="Output comma-separated partitions to partitions/FILE.csv, one per line. FILE is determined by the other options.")
     out_mode.add_argument('-F', '--form', action='store_true',
-                      help="Output FORM representations of the partitions to ipart/FILE.hf. FILE is determined by the other options.")
+                      help="Output FORM representations of the partitions to partitions/FILE.hf. FILE is determined by the other options.")
     out_mode.add_argument('-r', '--reverse', action='store_true',
                         help="Reverse the order of integers in the partitions.")
     out_mode.add_argument('-R', '--reverse-output', action='store_true',
@@ -229,8 +229,12 @@ def main(argv):
 
     # Setup output
     if write_file:
-        makedirs('ipart', exist_ok=True)
-    filename = f"ipart/{args.integer}{tag}"
+        makedirs('partitions', exist_ok=True)
+    if args.reverse:
+        tag += 'r'
+    if args.reverse_output:
+        tag += 'R'
+    filename = f"partitions/{args.integer}{tag}"
     def rev(arr, rev):
         yield from reversed(arr) if rev else arr
 
