@@ -18,20 +18,22 @@ from sys import argv
 # than the various conditionals needed to fit all in one function
 
 @cache
-def _upart(tot):
+def _upart(tot, filter):
     if tot <= 0:
         return [[]]
-    heads = [n+1 for n in range(tot)]
+    heads = [n+1 for n in range(tot) and filter(n+1)]
     return [[head] + tail
                 for head in reversed(heads)
-                for tail in _upart(tot-head)]
+                for tail in _upart(tot-head, filter)]
 
-def upart(integer):
+def upart(integer, filter=lambda x: True):
     """
     Compute an unordered integer partition.
 
     Arguments:
     integer -- the nonnegative integer to be partitioned
+    filter -- a boolean function; only values for which it is True are allowed in partitions.
+        (default: unconditionally true)
 
     Returns:
     A list containing all lists of positive integers such that sum(list) = integer
@@ -40,23 +42,25 @@ def upart(integer):
     """
     if integer < 0:
         raise ValueError(f"Integer must be non-negative ({integer} provided)")
-    return _upart(integer)
+    return _upart(integer, filter)
 
 
 @cache
-def _opart(tot, maxpart):
+def _opart(tot, maxpart, filter):
     if tot <= 0:
         return [[]]
-    heads = [n+1 for n in range(min(maxpart,tot))]
+    heads = [n+1 for n in range(min(maxpart,tot)) if filter(n+1)]
     return [[head] + tail
                 for head in reversed(heads)
-                for tail in _opart(tot-head, head)]
-def opart(integer):
+                for tail in _opart(tot-head, head, filter)]
+def opart(integer, filter=lambda x: True):
     """
     Compute an ordered integer partition.
 
     Arguments:
     integer -- the nonnegative integer to be partitioned
+    filter -- a boolean function; only values for which it is True are allowed in partitions.
+        (default: unconditionally true)
 
     Returns:
     A list containing all (descendingly) sorted lists of positive integers such that sum(list) = integer.
@@ -65,7 +69,7 @@ def opart(integer):
     """
     if integer < 0:
         raise ValueError(f"Integer must be non-negative ({integer} provided)")
-    return _opart(integer, integer)
+    return _opart(integer, integer, filter)
     
 @cache
 def _ufpart(tot, length):
@@ -73,18 +77,20 @@ def _ufpart(tot, length):
         return [[]]
     if length == 1:
         return [[tot]]
-    heads = [n for n in range(tot+1)]
+    heads = [n for n in range(tot+1) if filter(n)]
     return [[head] + tail
                 for head in reversed(heads)
-                for tail in _ufpart(tot-head, length-1)]
+                for tail in _ufpart(tot-head, length-1, filter)]
 
-def ufpart(integer, length):
+def ufpart(integer, length, filter=lambda x: True):
     """
     Compute an unordered fixed-length unordered integer partition.
 
     Arguments:
     integer -- the nonnegative integer to be partitioned
     length -- the length of the partition
+    filter -- a boolean function; only values for which it is True are allowed in partitions.
+        (default: unconditionally true)
 
     Returns:
     A list containing all lists of nonnegative integers such that sum(list) = integer and len(list) = integer.
@@ -98,28 +104,30 @@ def ufpart(integer, length):
         raise ValueError(f"Length must be non-negative ({length} provided)")
     if length == 0:
         return [] if integer > 0 else [[]]
-    return _ufpart(integer, length)
+    return _ufpart(integer, length, filter)
 
 @cache
-def _ofpart(tot, maxpart, length):
+def _ofpart(tot, maxpart, length, filter):
     if length <= 0:
         return [[]]
     if length == 1:
         return [[tot]]
     if maxpart == 0:
         return [[0]*length] # short-circuit
-    heads = [n for n in range(min(tot,maxpart)+1) if tot <= n*length] # condition ensures a tail exists
+    heads = [n for n in range(min(tot,maxpart)+1) if tot <= n*length and filter(n)] # condition ensures a tail exists
     return [[head] + tail
                 for head in reversed(heads)
-                for tail in _ofpart(tot-head, head, length-1)]
+                for tail in _ofpart(tot-head, head, length-1, filter)]
 
-def ofpart(integer, length):
+def ofpart(integer, length, filter=lambda x: True):
     """
     Compute an ordered fixed-length unordered integer partition.
 
     Arguments:
     integer -- the nonnegative integer to be partitioned
     length -- the length of the partition
+    filter -- a boolean function; only values for which it is True are allowed in partitions.
+        (default: unconditionally true)
 
     Returns:
     A list containing all (descendingly) sorted lists of nonnegative integers such that sum(list) = integer and len(list) = integer.
@@ -133,7 +141,7 @@ def ofpart(integer, length):
         raise ValueError(f"Length must be non-negative ({length} provided)")
     if length == 0:
         return [] if integer > 0 else [[]]
-    return _ofpart(integer, integer, length)
+    return _ofpart(integer, integer, length, filter)
 
 def main(argv):
 
@@ -144,22 +152,35 @@ def main(argv):
         description="Utility for generating integer partitions.\nBy Mattias Sjö, 2025",
         epilog="The mode options -[ou] are mutually exclusive, and either may be combined with -f.\nMore than one of the output options -[stcF] may be used simultaneously.\n \nThis uses a straightforward non-lazy recursive algorithm that, thanks to extensive caching, should be more-or-less linear in the number of partitions, which is in turn exponential in INT even in the --ordered case.")
 
-    part_mode = parser.add_mutually_exclusive_group()
-    part_mode.add_argument('-o', '--ordered', action='store_true',
+    part_mode = parser.add_argument_group("partition modes")
+    excl_mode = part_mode.add_mutually_exclusive_group()
+    excl_mode.add_argument('-o', '--ordered', action='store_true',
                            help="Generate ordered partitions into positive integers. This is the default.")
-    part_mode.add_argument('-u', '--unordered', action='store_true',
+    excl_mode.add_argument('-u', '--unordered', action='store_true',
                            help="Generate unordered partititons into positive integers.")
 
-    parser.add_argument('-f', '--fixed', action='store', nargs=1, type=int, metavar='N',
+    part_mode.add_argument('-f', '--fixed', action='store', nargs=1, type=int, metavar='N',
                            help="Instead of a flexible number of positive integers, generate partitions into a fixed number N of non-negative integers.")
 
-    parser.add_argument('-s', '--std', action='store_true',
+    modifiers = parser.add_argument_group("partition modifiers")
+    modifiers.add_argument('-m', '--min', action='store', nargs=1, type=int, metavar='N',
+                           help="Only generate partitions whose smallest element is greater or equal to N. Values less than 1 (or 0 with -f) are never considered.")
+    modifiers.add_argument('-M', '--max', action='store', nargs=1, type=int, metavar='N',
+                           help="Only generate partitions whose largest element is less or equal to N.")
+    parity = modifiers.add_mutually_exclusive_group()
+    parity.add_argument('-e', '--even', action='store_true',
+                           help="Only generate partitions into even integers. There will be none if INTEGER is odd.")
+    parity.add_argument('-E', '--odd', action='store_true',
+                           help="Only generate partitions into odd integers.")
+
+    out_mode = parser.add_argument_group("output modes")
+    out_mode.add_argument('-s', '--std', action='store_true',
                       help="Output whitespace-separated partitions to stdout, one per line. This is implied if no other output mode is specified.")
-    parser.add_argument('-t', '--txt', action='store_true',
+    out_mode.add_argument('-t', '--txt', action='store_true',
                       help="Output whitespace-separated partitions to ipart/FILE.txt, one per line. FILE is determined by the other options.")
-    parser.add_argument('-c', '--csv', action='store_true',
+    out_mode.add_argument('-c', '--csv', action='store_true',
                       help="Output comma-separated partitions to ipart/FILE.csv, one per line. FILE is determined by the other options.")
-    parser.add_argument('-F', '--form', action='store_true',
+    out_mode.add_argument('-F', '--form', action='store_true',
                       help="Output FORM representations of the partitions to ipart/FILE.hf. FILE is determined by the other options.")
 
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -174,6 +195,18 @@ def main(argv):
     write_file = any((args.csv, args.txt, args.form))
     write_std = args.std or not write_file
 
+    # Get modifiers
+    filters = []
+    if args.even:
+        filters.append("(x % 2) == 0")
+    elif args.odd:
+        filters.append("(x % 2) != 0")
+    if args.min:
+        filters.append(f"x >= {args.min[0]}")
+    if args.max:
+        filters.append(f"x <= {args.max[0]}")
+    filter = eval("lambda x:" + (' and '.join(filters) if filters else 'True'))
+
     # Select mode and compute partition
     if args.unordered:
         name = "Unordered"
@@ -184,9 +217,10 @@ def main(argv):
     if args.fixed:
         name += f" length-{args.fixed[0]}"
         tag += f'f{args.fixed[0]}'
-        parts = ufpart(args.integer, args.fixed[0]) if args.unordered else ofpart(args.integer, args.fixed[0])
+        parts = ufpart(args.integer, args.fixed[0], filter) if args.unordered else ofpart(args.integer, args.fixed[0], filter)
     else:
-        parts = upart(args.integer) if args.unordered else opart(args.integer)
+        parts = upart(args.integer, filter) if args.unordered else opart(args.integer, filter)
+
 
     # Setup output
     if write_file:
