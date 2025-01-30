@@ -73,7 +73,7 @@ def opart(integer, filter=lambda x: True):
     return _opart(integer, integer, filter)
     
 @cache
-def _ufpart(tot, length):
+def _ufpart(tot, length, filter):
     if length <= 0:
         return [[]]
     if length == 1:
