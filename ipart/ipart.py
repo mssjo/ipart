@@ -22,7 +22,7 @@ from condIO import CondIO
 def _upart(tot, filter):
     if tot <= 0:
         return [[]]
-    heads = [n+1 for n in range(tot) and filter(n+1)]
+    heads = [n+1 for n in range(tot) if filter(n+1)]
     return [[head] + tail
                 for head in reversed(heads)
                 for tail in _upart(tot-head, filter)]
@@ -144,14 +144,18 @@ def ofpart(integer, length, filter=lambda x: True):
         return [] if integer > 0 else [[]]
     return _ofpart(integer, integer, length, filter)
 
-def main(argv):
+def main():
 
     # Parse arguments
     parser = argparse.ArgumentParser(
         prog='ipart',
         formatter_class=argparse.RawTextHelpFormatter,
         description="Utility for generating integer partitions.\nBy Mattias Sjö, 2025",
-        epilog="The mode options -[ou] are mutually exclusive, and either may be combined with -f.\nMore than one of the output options -[stcF] may be used simultaneously.\n \nThis uses a straightforward non-lazy recursive algorithm that, thanks to extensive caching, should be more-or-less linear in the number of partitions, which is in turn exponential in INT even in the --ordered case.")
+        epilog="This uses a straightforward non-lazy recursive algorithm that, thanks to extensive caching, should be more-or-less linear in the number of partitions, which, however, is in turn exponential in INTEGER.")
+
+
+    parser.add_argument('integer', type=int, metavar='INTEGER',
+                      help="The integer to be partitioned.")
 
     part_mode = parser.add_argument_group("partition modes")
     excl_mode = part_mode.add_mutually_exclusive_group()
@@ -174,43 +178,64 @@ def main(argv):
     parity.add_argument('-E', '--odd', action='store_true',
                            help="Only generate partitions into odd integers.")
 
-    out_mode = parser.add_argument_group("output options")
-    out_mode.add_argument('-s', '--std', action='store_true',
-                      help="Output whitespace-separated partitions to stdout, one per line. This is implied if no other output mode is specified.")
-    out_mode.add_argument('-t', '--txt', action='store_true',
-                      help="Output whitespace-separated partitions to partitions/FILE.txt, one per line. FILE is determined by the other options.")
-    out_mode.add_argument('-c', '--csv', action='store_true',
-                      help="Output comma-separated partitions to partitions/FILE.csv, one per line. FILE is determined by the other options.")
-    out_mode.add_argument('-F', '--form', action='store_true',
-                      help="Output FORM representations of the partitions to partitions/FILE.hf. FILE is determined by the other options.")
-    out_mode.add_argument('-r', '--reverse', action='store_true',
+    out_mode = parser.add_argument_group("output options",
+                                         description="For each output mode provided, partitions are written to the given FILE (overwriting any previous contents), or to stdout if FILE is omitted. Multiple formats cannot be written to the same FILE (or stdout). If no output option is given, it defaults to -s.")
+
+    STDOUT = None
+    NOT_GIVEN = 0
+    out_mode_fmt = {'action':'store', 'nargs':'?', 'type':str, 'metavar':'FILE', 'const':STDOUT, 'default':NOT_GIVEN}
+    out_mode.add_argument('-s', '--spaces', **out_mode_fmt,
+                      help="Output partitions as lines of numbers separated by spaces. This is the default.")
+    out_mode.add_argument('-t', '--tabs', **out_mode_fmt,
+                      help="Like -s, but use tabulators.")
+    out_mode.add_argument('-c', '--commas', **out_mode_fmt,
+                      help="Like -s, but use commas.")
+    out_mode.add_argument('-p', '--paren-list', **out_mode_fmt,
+                      help="Output partitions as a list of lists, using commas and parentheses.")
+    out_mode.add_argument('-b', '--bracket-list', **out_mode_fmt,
+                      help="Like -p but with square brackets, conforming with the syntax of e.g. Python.")
+    out_mode.add_argument('-B', '--brace-list', **out_mode_fmt,
+                      help="Like -b, but with curly braces, conforming with the syntax of e.g. C/C++ and Mathematica.")
+    out_mode.add_argument('-F', '--form', **out_mode_fmt,
+                      help="Output partitions using FORM syntax, as a sum where each term is the function \"ipart\" with the partition as arguments.")
+    out_mode.add_argument('-w', '--wolfram', **out_mode_fmt,
+                      help="Like -F, but using Mathematica syntax.")
+
+    other = parser.add_argument_group("other options")
+    other.add_argument('-H', '--header', action='store', nargs='?', const='', default=None, metavar='PREFIX',
+                       help="Equip each output file (not stdout) with a header stating how and when it was generated, prefixed by PREFIX (default: nothing, unless the only output file is in form mode, in which case it is '*')")
+    other.add_argument('-r', '--reverse', action='store_true',
                         help="Reverse the order of integers in the partitions.")
-    out_mode.add_argument('-R', '--reverse-output', action='store_true',
+    other.add_argument('-R', '--reverse-output', action='store_true',
                         help="Reverse the order in which partitions are output.")
+    other.add_argument('-v', '--verbose', action='store_true',
+                      help="Print more information about what is done. Implies -s if nothing else is printed to stdout.")
 
-
-    parser.add_argument('-v', '--verbose', action='store_true',
-                      help="Print more information about what is done. Implies --std.")
-
-    parser.add_argument('integer', type=int, metavar='INT',
-                      help="The integer to be partitioned.")
 
     args = parser.parse_args()
 
-    # Combine options
-    write_file = any((args.csv, args.txt, args.form))
-    write_std = args.std or not write_file
-
     # Get modifiers
     filters = []
+    description = ""
     if args.even:
         filters.append("(x % 2) == 0")
+        description += "into even integers"
     elif args.odd:
         filters.append("(x % 2) != 0")
-    if args.min:
-        filters.append(f"x >= {args.min[0]}")
-    if args.max:
-        filters.append(f"x <= {args.max[0]}")
+        description += "into odd integers"
+    if args.min or args.max:
+        if not description:
+            description += "into integers"
+        if args.min and args.max:
+            description += f" between {args.min[0]} and {args.max[0]} (inclusive)"
+        if args.min:
+            filters.append(f"x >= {args.min[0]}")
+            if not args.max:
+                description += f" greater than {args.min[0]-1}"
+        if args.max:
+            filters.append(f"x <= {args.max[0]}")
+            if not args.min:
+                description += f" less than {args.max[0]+1}"
     filter = eval("lambda x:" + (' and '.join(filters) if filters else 'True'))
 
     # Select mode and compute partition
@@ -228,36 +253,60 @@ def main(argv):
         parts = upart(args.integer, filter) if args.unordered else opart(args.integer, filter)
 
     # Setup output
-    if write_file:
-        makedirs('partitions', exist_ok=True)
-    if args.reverse:
-        tag += 'r'
-    if args.reverse_output:
-        tag += 'R'
-    filename = f"partitions/{args.integer}{tag}"
     def rev(arr, rev):
         yield from reversed(arr) if rev else arr
 
+    out_modes = {
+        'spaces' : (lambda part: ' ' .join(part), '', '', '\n'),
+        'tabs'   : (lambda part: '\t'.join(part), '', '', '\n'),
+        'commas' : (lambda part: ',' .join(part), '', '', '\n'),
+        'form'   : (lambda part: f"   + ipart({','.join(part)})", '', '', '\n'),
+        'wolfram': (lambda part: f"   + ipart[{','.join(part)}]", '(\n', '\n)', '\n'),
+        'paren_list'   : (lambda part: f"    ({','.join(part)})", '(\n', '\n)', ',\n'),
+        'bracket_list' : (lambda part: f"    [{','.join(part)}]", '[\n', '\n]', ',\n'),
+        'brace_list'   : (lambda part: f"   {{{','.join(part)}}}", '{\n', '\n}', ',\n')}
+
+    outputs = {}
+    for mode,fmt in out_modes.items():
+        target = vars(args)[mode]
+        if target is NOT_GIVEN:
+            continue
+        elif target in outputs:
+            raise argparse.ArgumentError(f"""More than one output targeting {f'"{target}"' if target != STDOUT else 'stdout'}""")
+        outputs[target] = fmt
+
+    # Special cases
+    if not outputs or (args.verbose and (STDOUT not in outputs)):
+        outputs[STDOUT] = out_modes['spaces']
+    if args.form and sum(1 for target in outputs.keys() if target) and args.header == '':
+        args.header = '* '
+
+    out = CondIO(enable_std = (STDOUT in outputs))
+    for target in outputs.keys():
+        if target != STDOUT:
+            out.add(True, target, 'w')
+
     # Do output
     if args.verbose:
-        print(f"{name} partitions of {args.integer}:")
-    with (CondIO(enable_std = (write_std or args.verbose))
-          .add(args.txt, f"{filename}.txt", 'w', 'txt')
-          .add(args.csv, f"{filename}.csv", 'w', 'csv')
-          .add(args.form, f"{filename}.hf", 'w', 'hf')
-          ) as out:
-
-        out.print(f"* Generated by ipart ({__file__}) with options {' '.join(argv)} on {datetime.now().strftime('%c')}", 'hf')
+        print(f"{name} partitions of {args.integer}{f' {description}:' if description else ':'}")
+    with out:
+        count = 0
+        for target, (_, pre, _, _) in outputs.items():
+            if target and args.header is not None:
+                out.print(f"{args.header}Generated by ipart ({__file__}) with options {' '.join(argv[1:])} on {datetime.now().strftime('%c')}", target)
+            out.print(pre, target, end='')
         for part in rev(parts, args.reverse_output):
-            out.print(' '.join(str(p) for p in rev(part, args.reverse)))
-            out.print(' '.join(str(p) for p in rev(part, args.reverse)), 'txt')
-            out.print(','.join(str(p) for p in rev(part, args.reverse)), 'csv')
-            out.print(f"   + ipart({','.join(str(p) for p in rev(part, args.reverse))})", 'hf')
+            for target, (fmt, _, _, sep) in outputs.items():
+                out.print((sep if count > 0 else '') + fmt(str(p) for p in rev(part, args.reverse)), target, end='')
+            count += 1
+        for target, (_, _, post, _) in outputs.items():
+            out.print(post, target)
 
     if args.verbose:
-        for ext in ('txt', 'csv', 'hf'):
-            if out.is_enabled(ext):
-                print(f"Wrote to {filename}.{ext}")
+        for target in outputs.keys():
+            if target:
+                print(f"Wrote to {target}")
+        print(f"Generated {count} partition{'s' if count != 1 else ''}")
 
 if __name__ == '__main__':
-    main(argv[1:])
+    main()
